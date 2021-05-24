@@ -7,7 +7,7 @@ namespace Abot2.Tintin247.Models
 {
     public partial class DataCrawlTemp
     {
-        public Guid Id { get; set; }
+        public long Id { get; set; }
         public string Aid { get; set; }
         public string Titile { get; set; }
         public string Description { get; set; }
@@ -22,7 +22,9 @@ namespace Abot2.Tintin247.Models
         public string AuthorName { get; set; }
         public string Tags { get; set; }
         public string Type { get; set; }
-        public DateTime? PostedDatetime { get; set; }
-        public DateTime? CreatedDateTime { get; set; }
+        public string Category { get; set; }
+        public DateTime PostedDatetime { get; set; }
+        public DateTime CreatedDateTime { get; set; }
+        public bool IsUpdated { get; set; }
     }
 }

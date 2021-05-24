@@ -702,8 +702,6 @@ namespace Abot2.Tintin247.Models
             {
                 entity.ToTable("DataCrawlTemp");
 
-                entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
-
                 entity.Property(e => e.Aid)
                     .IsRequired()
                     .HasMaxLength(100)
@@ -720,6 +718,8 @@ namespace Abot2.Tintin247.Models
                 entity.Property(e => e.SourceLink).IsUnicode(false);
 
                 entity.Property(e => e.ThumbImage).IsUnicode(false);
+
+                entity.Property(e => e.Titile).IsRequired();
 
                 entity.Property(e => e.Type)
                     .HasMaxLength(50)

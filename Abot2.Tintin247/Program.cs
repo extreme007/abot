@@ -55,7 +55,7 @@ namespace Abot2.Tintin247
             try
             {
                 var crawledPage = await PageRequester(Uri);
-                Log.Information("{crawledPage}", new { url = crawledPage.Uri, status = Convert.ToInt32(crawledPage.HttpResponseMessage.StatusCode) });
+                Log.Information("{crawledPage}", new { url = crawledPage.Uri, status = Convert.ToInt32(crawledPage.HttpResponseMessage?.StatusCode) });
 
                 var listDataCrawl = new List<DataCrawlTemp>();
                 var newAricleList = crawledPage.AngleSharpHtmlDocument.QuerySelectorAll(".timeline>.story");
@@ -97,7 +97,17 @@ namespace Abot2.Tintin247
 
                             //Get Detail by link
                             var crawledPageDetail = await PageRequester(fullLink);
-                            var newAricleDetail = crawledPageDetail.AngleSharpHtmlDocument.QuerySelector(".article");
+                            Log.Information("{crawledPageDetail}", new { url = crawledPageDetail.Uri, status = Convert.ToInt32(crawledPageDetail.HttpResponseMessage?.StatusCode) });
+                            //Category
+                            var angleSharpHtmlDocumentDetail = crawledPageDetail.AngleSharpHtmlDocument;
+                            var listCategory = new List<string>();
+                            var breadcrumb = angleSharpHtmlDocumentDetail.QuerySelector(".breadcrumb").QuerySelectorAll(".item>a");
+                            foreach(var item in breadcrumb)
+                            {
+                                listCategory.Add(item.TextContent.Trim());
+                            }
+
+                            var newAricleDetail = angleSharpHtmlDocumentDetail.QuerySelector(".article");
                             if (newAricleDetail != null)
                             {
                                 var type = string.Empty;
@@ -107,7 +117,7 @@ namespace Abot2.Tintin247
                                 {
                                     type = "Photo";
                                 }
-                                else if (typeVideo)
+                                else if(typeVideo)
                                 {
                                     type = "Video";
                                 }
@@ -129,7 +139,7 @@ namespace Abot2.Tintin247
 
                                 listDataCrawl.Add(new DataCrawlTemp
                                 {
-                                    Id = Guid.NewGuid(),
+                                    Aid = aid,
                                     Titile = title,
                                     Description = description,
                                     ThumbImage = thumbImage,
@@ -138,14 +148,15 @@ namespace Abot2.Tintin247
                                     SourceImage = sourceImage,
                                     SourceName = sourceName,
                                     PostedDatetime = Convert.ToDateTime(datetime),
-                                    Aid = aid,
                                     CreatedDateTime = DateTime.Now,
                                     FullDescription = fullDescription,
                                     Content = content,
                                     SourceLink = sourceLink,
                                     AuthorName = authorName,
                                     Tags = listTags.Count > 0 ? string.Join(',', listTags.ToArray()) : null,
-                                    Type = type
+                                    Type = type,
+                                    Category = listCategory.Count > 0 ? string.Join('/',listCategory.ToArray()) : null,
+                                    IsUpdated = false
                                 });
                             }
                         }
