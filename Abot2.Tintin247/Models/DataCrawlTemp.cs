@@ -8,7 +8,7 @@ namespace Abot2.Tintin247.Models
     public partial class DataCrawlTemp
     {
         public Guid Id { get; set; }
-        public long? Aid { get; set; }
+        public string Aid { get; set; }
         public string Titile { get; set; }
         public string Description { get; set; }
         public string FullDescription { get; set; }

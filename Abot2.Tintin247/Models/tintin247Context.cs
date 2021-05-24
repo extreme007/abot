@@ -704,6 +704,11 @@ namespace Abot2.Tintin247.Models
 
                 entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
 
+                entity.Property(e => e.Aid)
+                    .IsRequired()
+                    .HasMaxLength(100)
+                    .IsUnicode(false);
+
                 entity.Property(e => e.Content).HasColumnType("ntext");
 
                 entity.Property(e => e.CreatedDateTime).HasColumnType("datetime");
