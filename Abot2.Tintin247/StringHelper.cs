@@ -26,6 +26,7 @@ namespace Abot2.Tintin247
             if (string.IsNullOrEmpty(strVietNamese)) return "";
             char[] delimiter = { ':', '?', '"', '/', '!', ',', '-', '=', '%', '$', '&', '*', '.' };
             strVietNamese = RemoveMultiSpace(strVietNamese);
+            strVietNamese = strVietNamese.Replace("'", "");
             string[] subString = strVietNamese.Split(delimiter);
             strVietNamese = "";
             foreach (var t in subString)
