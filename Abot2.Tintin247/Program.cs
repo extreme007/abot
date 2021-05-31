@@ -148,8 +148,7 @@ namespace Abot2.Tintin247
                                     {
                                         Aid = aid,
                                         Title = title,
-                                        MetaTitle = StringHelper.ConvertShortName(title),
-                                        RewriteUrl = null,
+                                        Slug = StringHelper.ConvertShortName(title),
                                         Description = description,
                                         ThumbImage = thumbImage,
                                         Link = link,
@@ -163,16 +162,14 @@ namespace Abot2.Tintin247
                                         Author = author,
                                         Tags = listTags.Count > 0 ? string.Join(',', listTags.ToArray()) : null,
                                         Type = type,
-                                        Category = category,
+                                        CategoryId = category,
                                         IsHot = isHot,
                                         IsRank1 = false,
                                         ViewCount = 0,
                                         CommentCount = 0,
                                         CreatedBy = null,
                                         CreatedOn = DateTime.Now,
-                                        LastModifiedBy = null,
-                                        LastModifiedOn = null,
-                                        IsDeleted = false
+                                        IsPublished = true
                                     });
                                 }
                             }
@@ -182,7 +179,7 @@ namespace Abot2.Tintin247
                             //Lưu cache
                             await cache.StringSetAsync(cacheName, JsonSerializer.Serialize(listDataCrawl));
 
-                            using (var dbContext = new aspnetcoreheroContext())
+                            using (var dbContext = new tintin247comContext())
                             {
                                 await dbContext.Articles.AddRangeAsync(listDataCrawl);
                                 await dbContext.SaveChangesAsync();
@@ -214,7 +211,7 @@ namespace Abot2.Tintin247
 
         private static List<Article> GetDataCraw()
         {
-            using (var dbcontext = new aspnetcoreheroContext())
+            using (var dbcontext = new tintin247comContext())
             {
                 return  dbcontext.Articles.OrderBy(x=>x.PostedDatetime).Take(200).ToList<Article>();
             }
@@ -225,44 +222,78 @@ namespace Abot2.Tintin247
             var crawledPage = await PageRequester(Uri);
             Log.Information("{crawledPage}", new { url = crawledPage.Uri, status = Convert.ToInt32(crawledPage.HttpResponseMessage?.StatusCode) });
 
-            var listDataCrawl = new List<ProductCategory>();
-            var newAricleCategory = crawledPage.AngleSharpHtmlDocument.QuerySelectorAll(".nav__parent").Where(x=>x.ClassName.Contains("child"));
-            foreach(var item in newAricleCategory)
+            var listDefault = new List<ArticleCategory>() { new ArticleCategory
             {
-                var titleParent = item.Children[0].QuerySelector("span").TextContent.Trim();
-                var childrens = item.Children[1].Children;
-                using (var dbContext = new aspnetcoreheroContext())
+                Title ="Tin mới",
+                Slug = StringHelper.ConvertShortName("Tin mới"),
+                CreatedBy =  "0bdd8200-ff66-46f3-bfb0-78a43e1124cb",
+                CreatedOn = DateTime.Now,
+                Order = 1
+            },
+             new ArticleCategory
+            {
+                Title ="Tin nóng",
+                Slug = StringHelper.ConvertShortName("Tin nóng"),
+                CreatedBy =  "0bdd8200-ff66-46f3-bfb0-78a43e1124cb",
+                CreatedOn = DateTime.Now,
+                Order = 2
+            },
+            new ArticleCategory
+            {
+                Title ="Chủ đề",
+                Slug = StringHelper.ConvertShortName("Chủ đề"),
+                CreatedBy =  "0bdd8200-ff66-46f3-bfb0-78a43e1124cb",
+                CreatedOn = DateTime.Now,
+                Order = 3
+            }};
+            using (var dbContext = new tintin247comContext())
+            {
+                await dbContext.AddRangeAsync(listDefault);
+                await dbContext.SaveChangesAsync();
+
+                var order = 4;
+                var newAricleCategory = crawledPage.AngleSharpHtmlDocument.QuerySelectorAll(".nav__parent").Where(x => x.ClassName.Contains("child"));
+                foreach (var item in newAricleCategory)
                 {
+                    var titleParent = item.Children[0].QuerySelector("span").TextContent.Trim();
+                    var childrens = item.Children[1].Children;
+
                     var category = new ArticleCategory
                     {
                         Title = titleParent,
-                        MetaTitle = StringHelper.ConvertShortName(titleParent),
-                        IsDeleted = false,
-                        CreatedOn = DateTime.Now
+                        Slug = StringHelper.ConvertShortName(titleParent),
+                        CreatedBy = "0bdd8200-ff66-46f3-bfb0-78a43e1124cb",
+                        CreatedOn = DateTime.Now,
+                        Order = order,
+                        ParentId = 3
                     };
                     await dbContext.ArticleCategories.AddAsync(category);
                     await dbContext.SaveChangesAsync();
+                    order += 1;
                     var id = category.Id;
-                    foreach(var item2 in childrens)
+                    foreach (var item2 in childrens)
                     {
                         var title2 = item2.QuerySelector("span").TextContent.Trim();
                         await dbContext.ArticleCategories.AddAsync(new ArticleCategory
                         {
                             Title = title2,
-                            MetaTitle = StringHelper.ConvertShortName(title2),
+                            Slug = StringHelper.ConvertShortName(title2),
                             ParentId = id,
-                            IsDeleted = false,
-                            CreatedOn = DateTime.Now
+                            CreatedBy = "0bdd8200-ff66-46f3-bfb0-78a43e1124cb",
+                            CreatedOn = DateTime.Now,
+                            Order =order
                         });
                         await dbContext.SaveChangesAsync();
+                        order += 1;
                     }
+
                 }
             }
         }
 
         private static List<ArticleCategory> GetDataCategory()
         {
-            using (var dbcontext = new aspnetcoreheroContext())
+            using (var dbcontext = new tintin247comContext())
             {
                 return dbcontext.ArticleCategories.ToList<ArticleCategory>();
             }

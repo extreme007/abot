@@ -9,7 +9,6 @@ namespace Abot2.Tintin247.Models
     {
         public User()
         {
-            RefreshTokens = new HashSet<RefreshToken>();
             UserClaims = new HashSet<UserClaim>();
             UserLogins = new HashSet<UserLogin>();
             UserRoles = new HashSet<UserRole>();
@@ -17,6 +16,10 @@ namespace Abot2.Tintin247.Models
         }
 
         public string Id { get; set; }
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public byte[] ProfilePicture { get; set; }
+        public bool IsActive { get; set; }
         public string UserName { get; set; }
         public string NormalizedUserName { get; set; }
         public string Email { get; set; }
@@ -31,14 +34,7 @@ namespace Abot2.Tintin247.Models
         public DateTimeOffset? LockoutEnd { get; set; }
         public bool LockoutEnabled { get; set; }
         public int AccessFailedCount { get; set; }
-        public string FirstName { get; set; }
-        public string LastName { get; set; }
-        public int UsernameChangeLimit { get; set; }
-        public byte[] ProfilePicture { get; set; }
-        public bool IsActive { get; set; }
-        public string ActivatedBy { get; set; }
 
-        public virtual ICollection<RefreshToken> RefreshTokens { get; set; }
         public virtual ICollection<UserClaim> UserClaims { get; set; }
         public virtual ICollection<UserLogin> UserLogins { get; set; }
         public virtual ICollection<UserRole> UserRoles { get; set; }

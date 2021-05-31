@@ -9,8 +9,7 @@ namespace Abot2.Tintin247.Models
     {
         public int Id { get; set; }
         public string Title { get; set; }
-        public string MetaTitle { get; set; }
-        public string RewriteUrl { get; set; }
+        public string Slug { get; set; }
         public string Aid { get; set; }
         public string Description { get; set; }
         public string FullDescription { get; set; }
@@ -24,16 +23,19 @@ namespace Abot2.Tintin247.Models
         public string Author { get; set; }
         public string Tags { get; set; }
         public string Type { get; set; }
-        public int Category { get; set; }
+        public int CategoryId { get; set; }
         public DateTime PostedDatetime { get; set; }
         public bool IsHot { get; set; }
         public bool IsRank1 { get; set; }
         public int ViewCount { get; set; }
         public int CommentCount { get; set; }
+        public bool IsPublished { get; set; }
+        public int? ArticleCategoryId { get; set; }
         public string CreatedBy { get; set; }
         public DateTime CreatedOn { get; set; }
         public string LastModifiedBy { get; set; }
         public DateTime? LastModifiedOn { get; set; }
-        public bool IsDeleted { get; set; }
+
+        public virtual ArticleCategory ArticleCategory { get; set; }
     }
 }
