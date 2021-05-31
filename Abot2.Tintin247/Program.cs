@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Text.Json;
+using System.Diagnostics;
 
 namespace Abot2.Tintin247
 {
@@ -21,14 +22,22 @@ namespace Abot2.Tintin247
                .WriteTo.Console(outputTemplate: Constants.LogFormatTemplate)
                .CreateLogger();
 
-            Log.Information("Starting up!");
-            //await CrawlCategory("https://m.baomoi.com");
-
+            Log.Information("------------------------- Starting up! ----------------------------");
+            Stopwatch sw = Stopwatch.StartNew();
+          
             var listUri = new List<string> { "https://m.baomoi.com/tin-moi.epi", "https://m.baomoi.com" };
+         
+            var existed = CheckExistedCategory();
+            if(!existed)
+            {
+                await CrawlCategory("https://m.baomoi.com");
+            }
             await Crawler(listUri);
+            sw.Stop();
+            TimeSpan ts = sw.Elapsed;
 
-
-            Log.Information("Done!");
+            string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}", ts.Minutes, ts.Seconds,ts.Milliseconds);
+            Log.Information(string.Format("--------------- Done, RunTime -> {0} --------------", elapsedTime));
             Console.ReadKey();
         }
 
@@ -56,40 +65,57 @@ namespace Abot2.Tintin247
         {
             try
             {
-                var dataCategory = new List<ArticleCategory>();
-                var cache = RedisConnectorHelper.Connection.GetDatabase();
-                var dataRedisCategory = await cache.StringGetAsync("CategoryMemory");
-                if (string.IsNullOrEmpty(dataRedisCategory))
-                {
-                    dataCategory = GetDataCategory();
-                    await cache.StringSetAsync("CategoryMemory",JsonSerializer.Serialize(dataCategory));
-                }
-                else
-                {
-                    dataCategory = JsonSerializer.Deserialize<List<ArticleCategory>>(dataRedisCategory);
-                }
-               
+                var listDataCrawl = new List<Article>();
+                var dataCategory = GetDataCategory();
+                //var cache = RedisConnectorHelper.Connection.GetDatabase();
+                //var dataRedisCategory = await cache.StringGetAsync("CategoryMemory");
+                //if (string.IsNullOrEmpty(dataRedisCategory))
+                //{
+                //    dataCategory = GetDataCategory();
+                //    await cache.StringSetAsync("CategoryMemory",JsonSerializer.Serialize(dataCategory));
+                //}
+                //else
+                //{
+                //    dataCategory = JsonSerializer.Deserialize<List<ArticleCategory>>(dataRedisCategory);
+                //}
+            
+
+
+                var dataArticleCache = GetDataCrawl();
+                //var cacheName = "ArticleMemory";
+                //var dataRedis = await cache.StringGetAsync(cacheName);
+                //if (string.IsNullOrEmpty(dataRedis))
+                //{
+                //    dataArticleCache = GetDataCrawl();
+                //    await cache.StringSetAsync(cacheName, JsonSerializer.Serialize(dataArticleCache));
+                //}
+                //else
+                //{
+                //    dataArticleCache = JsonSerializer.Deserialize<List<Article>>(dataRedis);
+                //}
 
                 foreach (var Uri in listUri)
                 {
                     var isHot = !Uri.Contains("tin-moi");
-                    var cacheName = isHot ? "ArticleMemoryHot" : "ArticleMemoryNew";
                     var crawledPage = await PageRequester(Uri);
                     Log.Information("{crawledPage}", new { url = crawledPage.Uri, status = Convert.ToInt32(crawledPage.HttpResponseMessage?.StatusCode) });
-                    IEnumerable<AngleSharp.Dom.IElement> newAricleListNotExisted = null;
-                    var listDataCrawl = new List<Article>();
-                    var dataRedis = await cache.StringGetAsync(cacheName);
-                    var dataCrawled = string.IsNullOrEmpty(dataRedis) ? GetDataCraw() : JsonSerializer.Deserialize<List<Article>>(dataRedis);
-                    var aricleList = crawledPage.AngleSharpHtmlDocument.QuerySelectorAll(".timeline>.story");
+                    var aricleList = crawledPage.AngleSharpHtmlDocument.QuerySelector(".timeline").Children;
                     if (aricleList != null)
                     {
-                        var listAid = dataCrawled.Select(x => x.Aid);
-                        newAricleListNotExisted = aricleList.Where(x => !listAid.Contains(x.GetAttribute("data-aid")));
-
-                        foreach (var article in newAricleListNotExisted)
+                        foreach (var article in aricleList.Where(x=>x.ClassName.Contains("rank1-stories") || x.ClassName.Contains("story")))
                         {
-                            var storyElement = article.QuerySelector(".story__link");
-                            if (storyElement != null)
+                            AngleSharp.Dom.IElement elementData = article;
+                            var isRank1 = article.ClassName.Contains("rank1-stories");
+                            if (isRank1)
+                            {
+                                elementData = article.QuerySelector(".story");
+                            }
+
+                            var aid = elementData.GetAttribute("data-aid");
+
+                            var storyElement = elementData.QuerySelector(".story__link");
+                            var existed = dataArticleCache.Any(x => x.Aid == aid);
+                            if (storyElement != null && !existed)
                             {
                                 var storyMeta = storyElement.QuerySelector(".story__meta");
 
@@ -97,11 +123,11 @@ namespace Abot2.Tintin247
                                 var link = storyElement.GetAttribute("href");
                                 var storyThumbElement = storyElement.QuerySelector(".story__thumb>img") ?? storyElement.QuerySelector(".story__thumb>.is-first>img");
                                 string thumbImage = storyThumbElement == null ? null : storyThumbElement.GetAttribute("data-src") ?? storyThumbElement.GetAttribute("src");
-                                var sourceImage = storyMeta.QuerySelector(".source-image").GetAttribute("src");
+                                var sourceImage = storyMeta.QuerySelector(".source-image")?.GetAttribute("src");
                                 var sourceName = storyMeta.QuerySelector(".source-image")?.GetAttribute("alt");
                                 var datetime = storyMeta.QuerySelector(".friendly").GetAttribute("datetime");
                                 var description = storyElement.QuerySelector(".story__summary").TextContent.Trim();
-                                var aid = article.GetAttribute("data-aid");
+                      
                                 string fullLink = string.Format("{0}{1}", "https://baomoi.com", link);
 
                                 //Get Detail by link
@@ -144,7 +170,7 @@ namespace Abot2.Tintin247
                                         listTags.Add(tag.TextContent.Trim());
                                     }
 
-                                    listDataCrawl.Add(new Article
+                                    var articleCrawled = new Article
                                     {
                                         Aid = aid,
                                         Title = title,
@@ -163,32 +189,34 @@ namespace Abot2.Tintin247
                                         Tags = listTags.Count > 0 ? string.Join(',', listTags.ToArray()) : null,
                                         Type = type,
                                         CategoryId = category,
+                                        ArticleCategoryId = category,
                                         IsHot = isHot,
-                                        IsRank1 = false,
+                                        IsRank1 = isRank1,
                                         ViewCount = 0,
                                         CommentCount = 0,
-                                        CreatedBy = null,
+                                        CreatedBy = "0bdd8200-ff66-46f3-bfb0-78a43e1124cb",
                                         CreatedOn = DateTime.Now,
                                         IsPublished = true
-                                    });
+                                    };
+                                    listDataCrawl.Add(articleCrawled);
+                                    dataArticleCache.Add(articleCrawled);
                                 }
                             }
                         }
-                        if (listDataCrawl.Count > 0)
-                        {
-                            //Lưu cache
-                            await cache.StringSetAsync(cacheName, JsonSerializer.Serialize(listDataCrawl));
-
-                            using (var dbContext = new tintin247comContext())
-                            {
-                                await dbContext.Articles.AddRangeAsync(listDataCrawl);
-                                await dbContext.SaveChangesAsync();
-                            }
-
-                        }
                     }
                 }
-              
+
+                if (listDataCrawl.Count > 0)
+                {
+                    //await cache.StringSetAsync(cacheName, JsonSerializer.Serialize(listDataCrawl));
+
+                    using (var dbContext = new tintin247comContext())
+                    {
+                        await dbContext.Articles.AddRangeAsync(listDataCrawl);
+                        await dbContext.SaveChangesAsync();
+                    }
+                }
+
             }
             catch (Exception ex)
             {
@@ -209,11 +237,11 @@ namespace Abot2.Tintin247
            return await pageRequester.MakeRequestAsync(new Uri(uri));
         }
 
-        private static List<Article> GetDataCraw()
+        private static List<Article> GetDataCrawl()
         {
             using (var dbcontext = new tintin247comContext())
             {
-                return  dbcontext.Articles.OrderBy(x=>x.PostedDatetime).Take(200).ToList<Article>();
+                return  dbcontext.Articles.OrderByDescending(x=>x.CreatedOn).Take(300).ToList<Article>();
             }
         }
 
@@ -237,19 +265,22 @@ namespace Abot2.Tintin247
                 CreatedBy =  "0bdd8200-ff66-46f3-bfb0-78a43e1124cb",
                 CreatedOn = DateTime.Now,
                 Order = 2
-            },
-            new ArticleCategory
-            {
-                Title ="Chủ đề",
-                Slug = StringHelper.ConvertShortName("Chủ đề"),
-                CreatedBy =  "0bdd8200-ff66-46f3-bfb0-78a43e1124cb",
-                CreatedOn = DateTime.Now,
-                Order = 3
             }};
             using (var dbContext = new tintin247comContext())
             {
-                await dbContext.AddRangeAsync(listDefault);
+                await dbContext.ArticleCategories.AddRangeAsync(listDefault);
                 await dbContext.SaveChangesAsync();
+                var chude = new ArticleCategory
+                {
+                    Title = "Chủ đề",
+                    Slug = StringHelper.ConvertShortName("Chủ đề"),
+                    CreatedBy = "0bdd8200-ff66-46f3-bfb0-78a43e1124cb",
+                    CreatedOn = DateTime.Now,
+                    Order = 3
+                };
+                await dbContext.ArticleCategories.AddAsync(chude);
+                await dbContext.SaveChangesAsync();
+                var idChude = chude.Id;
 
                 var order = 4;
                 var newAricleCategory = crawledPage.AngleSharpHtmlDocument.QuerySelectorAll(".nav__parent").Where(x => x.ClassName.Contains("child"));
@@ -265,7 +296,7 @@ namespace Abot2.Tintin247
                         CreatedBy = "0bdd8200-ff66-46f3-bfb0-78a43e1124cb",
                         CreatedOn = DateTime.Now,
                         Order = order,
-                        ParentId = 3
+                        ParentId = idChude
                     };
                     await dbContext.ArticleCategories.AddAsync(category);
                     await dbContext.SaveChangesAsync();
@@ -296,6 +327,14 @@ namespace Abot2.Tintin247
             using (var dbcontext = new tintin247comContext())
             {
                 return dbcontext.ArticleCategories.ToList<ArticleCategory>();
+            }
+        }
+
+        private static bool CheckExistedCategory()
+        {
+            using (var dbcontext = new tintin247comContext())
+            {
+                return  dbcontext.ArticleCategories.Any();
             }
         }
     }
