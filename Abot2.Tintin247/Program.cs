@@ -9,6 +9,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Text.Json;
 using System.Diagnostics;
+using AngleSharp;
+using AngleSharp.Html.Parser;
+using AngleSharp.Html.Dom;
+using AngleSharp.Dom;
 
 namespace Abot2.Tintin247
 {
@@ -24,15 +28,19 @@ namespace Abot2.Tintin247
 
             Log.Information("------------------------- Starting up! ----------------------------");
             Stopwatch sw = Stopwatch.StartNew();
-          
-            var listUri = new List<string> { "https://m.baomoi.com/tin-moi.epi", "https://m.baomoi.com" };
-         
-            var existed = CheckExistedCategory();
-            if(!existed)
-            {
-                await CrawlCategory("https://m.baomoi.com");
-            }
-            await Crawler(listUri);
+
+            //var listUri = new List<string> { "https://m.baomoi.com/tin-moi.epi", "https://m.baomoi.com" };
+
+            //var existed = CheckExistedCategory();
+            //if (!existed)
+            //{
+            //    await CrawlCategory("https://m.baomoi.com");
+            //}
+            //await Crawler(listUri);
+
+            //ReplaceSlug();
+            //TestReplaceContent();
+
             sw.Stop();
             TimeSpan ts = sw.Elapsed;
 
@@ -159,7 +167,9 @@ namespace Abot2.Tintin247
                                         type = "Text";
                                     }
                                     var fullDescription = newAricleDetail.QuerySelector(".article__sapo").TextContent.Trim();
-                                    var content = newAricleDetail.QuerySelector(".article__body").OuterHtml;
+                                    var content = ReplaceContent(newAricleDetail.QuerySelector(".article__body").InnerHtml);
+                                    var image = newAricleDetail.QuerySelectorAll(".body-image>img").FirstOrDefault()?.GetAttribute("src");
+
                                     var tagsElements = newAricleDetail.QuerySelector(".article__tag").QuerySelectorAll(".keyword");
                                     var sourceLink = newAricleDetail.QuerySelector(".bm-source>a>.source").TextContent.Trim();
                                     var authorNameElement = newAricleDetail.QuerySelectorAll(".body-author");
@@ -177,6 +187,7 @@ namespace Abot2.Tintin247
                                         Slug = StringHelper.ConvertShortName(title),
                                         Description = description,
                                         ThumbImage = thumbImage,
+                                        Image = image,
                                         Link = link,
                                         FullLink = fullLink,
                                         SourceImage = sourceImage,
@@ -335,6 +346,82 @@ namespace Abot2.Tintin247
             using (var dbcontext = new tintin247comContext())
             {
                 return  dbcontext.ArticleCategories.Any();
+            }
+        }
+
+        private static void ReplaceSlug()
+        {
+            var listDataReplace = new List<Article>();
+            using (var dbcontext = new tintin247comContext())
+            {
+                var listData = dbcontext.Articles.ToList<Article>();
+                foreach(var item in listData)
+                {
+                    item.Slug = StringHelper.ConvertShortName(item.Title);
+                    listDataReplace.Add(item);
+                }
+                dbcontext.Articles.UpdateRange(listDataReplace);
+                dbcontext.SaveChanges();
+            }
+        }
+
+        private static string ReplaceContent(string content)
+        {
+            var parser = new HtmlParser(new HtmlParserOptions
+            {
+                IsNotConsumingCharacterReferences = true,
+            });
+
+            var document = parser.ParseDocument(content);
+            var lazyImgae = document.QuerySelectorAll(".lazy-img");
+            foreach (var item in lazyImgae)
+            {
+                var newElement = document.CreateElement("img");
+                newElement.SetAttribute("class", item.ClassName);
+                newElement.SetAttribute("src", item.GetAttribute("data-src"));
+                newElement.SetAttribute("width", item.GetAttribute("width"));
+                newElement.SetAttribute("height", item.GetAttribute("height"));
+                item.Insert(AdjacentPosition.BeforeBegin, newElement.OuterHtml);
+                item.Remove();
+            }
+
+            return document.QuerySelector("body").InnerHtml;
+        }
+
+        private static void TestReplaceContent()
+        {
+            using (var dbcontext = new tintin247comContext())
+            {
+                dbcontext.ChangeTracker.QueryTrackingBehavior = Microsoft.EntityFrameworkCore.QueryTrackingBehavior.NoTracking;
+                var data = dbcontext.Articles.Where(x=>x.CreatedOn.Day != 3);
+
+                var parser = new HtmlParser(new HtmlParserOptions
+                {
+                    IsNotConsumingCharacterReferences = true,
+                });
+                foreach(var item in data)
+                {
+                    var newArtileString = JsonSerializer.Serialize(item);
+                    var newArtile = JsonSerializer.Deserialize<Article>(newArtileString);
+
+                    var document = parser.ParseDocument(newArtile.Content);
+                    var lazyImgae = document.QuerySelectorAll(".lazy-img");
+                    foreach (var subItem in lazyImgae)
+                    {
+                        var newElement = document.CreateElement("img");
+                        newElement.SetAttribute("class", subItem.ClassName);
+                        newElement.SetAttribute("src", subItem.GetAttribute("data-src"));
+                        newElement.SetAttribute("width", subItem.GetAttribute("width"));
+                        newElement.SetAttribute("height", subItem.GetAttribute("height"));
+                        subItem.Insert(AdjacentPosition.BeforeBegin, newElement.OuterHtml);
+                        subItem.Remove();
+                    }
+                    newArtile.Content = document.QuerySelector("body").InnerHtml;
+                    newArtile.Image = document.QuerySelectorAll(".body-image>img").FirstOrDefault()?.GetAttribute("src");
+
+                    dbcontext.Articles.Update(newArtile);
+                }
+                dbcontext.SaveChanges();
             }
         }
     }
