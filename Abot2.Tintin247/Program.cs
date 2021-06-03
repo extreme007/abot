@@ -29,13 +29,18 @@ namespace Abot2.Tintin247
             Log.Information("------------------------- Starting up! ----------------------------");
             Stopwatch sw = Stopwatch.StartNew();
 
-            //var listUri = new List<string> { "https://m.baomoi.com/tin-moi.epi", "https://m.baomoi.com" };
+            var listUri = new List<string> { "https://m.baomoi.com/tin-moi.epi", "https://m.baomoi.com" };
 
-            //var existed = CheckExistedCategory();
-            //if (!existed)
-            //{
-            //    await CrawlCategory("https://m.baomoi.com");
-            //}
+            var existedCategory = CheckExistedCategory();
+            if (!existedCategory)
+            {
+                await CrawlCategory("https://m.baomoi.com");
+            }
+            var existedPartner = CheckExistedPartner();
+            if (!existedPartner)
+            {
+                await CrawlPartner("https://baomoi.com/");
+            }
             //await Crawler(listUri);
 
             //ReplaceSlug();
@@ -207,7 +212,7 @@ namespace Abot2.Tintin247
                                         CommentCount = 0,
                                         CreatedBy = "0bdd8200-ff66-46f3-bfb0-78a43e1124cb",
                                         CreatedOn = DateTime.Now,
-                                        IsPublished = true
+                                        IsPublished = typeVideo ? false : true
                                     };
                                     listDataCrawl.Add(articleCrawled);
                                     dataArticleCache.Add(articleCrawled);
@@ -348,6 +353,13 @@ namespace Abot2.Tintin247
                 return  dbcontext.ArticleCategories.Any();
             }
         }
+        private static bool CheckExistedPartner()
+        {
+            using (var dbcontext = new tintin247comContext())
+            {
+                return dbcontext.Partners.Any();
+            }
+        }
 
         private static void ReplaceSlug()
         {
@@ -422,6 +434,39 @@ namespace Abot2.Tintin247
                     dbcontext.Articles.Update(newArtile);
                 }
                 dbcontext.SaveChanges();
+            }
+        }
+
+        private static async Task CrawlPartner(string Uri)
+        {
+            var crawledPage = await PageRequester(Uri);
+            Log.Information("{crawledPage}", new { url = crawledPage.Uri, status = Convert.ToInt32(crawledPage.HttpResponseMessage?.StatusCode) });
+
+           
+            using (var dbContext = new tintin247comContext())
+            {
+                var order = 1;
+                var  listPartner = crawledPage.AngleSharpHtmlDocument.QuerySelectorAll(".box-content>.wrap>ul>li");
+                foreach (var item in listPartner)
+                {
+                    var title = item.QuerySelector("span").TextContent.Trim();
+                    var image = item.QuerySelector("img").GetAttribute("data-src");
+
+                    var partner = new Partner
+                    {
+                        Title = title,
+                        Slug = StringHelper.ConvertShortName(title),
+                        CreatedBy = "0bdd8200-ff66-46f3-bfb0-78a43e1124cb",
+                        CreatedOn = DateTime.Now,
+                        Image = image,
+                        Link = "",
+                        Order = order,
+                    };
+                    await dbContext.Partners.AddAsync(partner);
+          
+                    order += 1;
+                }
+                await dbContext.SaveChangesAsync();
             }
         }
     }

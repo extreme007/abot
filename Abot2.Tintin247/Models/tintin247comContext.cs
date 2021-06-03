@@ -21,6 +21,7 @@ namespace Abot2.Tintin247.Models
         public virtual DbSet<ArticleCategory> ArticleCategories { get; set; }
         public virtual DbSet<AuditLog> AuditLogs { get; set; }
         public virtual DbSet<Brand> Brands { get; set; }
+        public virtual DbSet<Partner> Partners { get; set; }
         public virtual DbSet<Product> Products { get; set; }
         public virtual DbSet<Role> Roles { get; set; }
         public virtual DbSet<RoleClaim> RoleClaims { get; set; }
