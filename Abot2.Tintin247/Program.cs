@@ -41,10 +41,11 @@ namespace Abot2.Tintin247
             {
                 await CrawlPartner("https://baomoi.com/");
             }
-            //await Crawler(listUri);
+            await Crawler(listUri);
 
             //ReplaceSlug();
             //TestReplaceContent();
+           // UpdateGroupCategory();
 
             sw.Stop();
             TimeSpan ts = sw.Elapsed;
@@ -150,8 +151,13 @@ namespace Abot2.Tintin247
 
                                 var angleSharpHtmlDocumentDetail = crawledPageDetail.AngleSharpHtmlDocument;
                                 var breadcrumb = angleSharpHtmlDocumentDetail.QuerySelector(".breadcrumb").QuerySelectorAll(".item>a");
-                                var lastBreadcrumb = breadcrumb[breadcrumb.Count() - 1].TextContent.Trim();
-                                var category = dataCategory.FirstOrDefault(x => x.Title == lastBreadcrumb).Id;
+                                List<string> listBreadcrumb = new List<string>();
+                                foreach(var item in breadcrumb)
+                                {
+                                    listBreadcrumb.Add(item.TextContent.Trim());
+                                }
+                                var category = dataCategory.FirstOrDefault(x => x.Title == listBreadcrumb.Last()).Id;
+                                var groupCategory = dataCategory.FirstOrDefault(x => x.Title == listBreadcrumb.First()).Id;
 
                                 var newAricleDetail = angleSharpHtmlDocumentDetail.QuerySelector(".article");
                                 if (newAricleDetail != null)
@@ -205,6 +211,7 @@ namespace Abot2.Tintin247
                                         Tags = listTags.Count > 0 ? string.Join(',', listTags.ToArray()) : null,
                                         Type = type,
                                         CategoryId = category,
+                                        GroupCategoryId = groupCategory,
                                         ArticleCategoryId = category,
                                         IsHot = isHot,
                                         IsRank1 = isRank1,
@@ -232,6 +239,8 @@ namespace Abot2.Tintin247
                         await dbContext.SaveChangesAsync();
                     }
                 }
+
+                Log.Information(string.Format("-----------Total: {0}", listDataCrawl.Count));
 
             }
             catch (Exception ex)
@@ -467,6 +476,22 @@ namespace Abot2.Tintin247
                     order += 1;
                 }
                 await dbContext.SaveChangesAsync();
+            }
+        }
+
+        private static void UpdateGroupCategory()
+        {
+            var listDataReplace = new List<Article>();
+            using (var dbcontext = new tintin247comContext())
+            {
+                var listCategory = dbcontext.ArticleCategories.ToList<ArticleCategory>();
+                var listData = dbcontext.Articles.ToList<Article>().Where(x=>x.GroupCategoryId == 0);
+                foreach (var item in listData)
+                {
+                    item.GroupCategoryId = listCategory.Where(x => x.Id == item.CategoryId).FirstOrDefault().ParentId.Value;
+                    dbcontext.Articles.Update(item);
+                }
+                dbcontext.SaveChanges();
             }
         }
     }

@@ -25,6 +25,7 @@ namespace Abot2.Tintin247.Models
         public string Tags { get; set; }
         public string Type { get; set; }
         public int CategoryId { get; set; }
+        public int GroupCategoryId { get; set; }
         public DateTime PostedDatetime { get; set; }
         public bool IsHot { get; set; }
         public bool IsRank1 { get; set; }
