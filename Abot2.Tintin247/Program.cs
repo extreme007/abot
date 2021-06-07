@@ -13,6 +13,9 @@ using AngleSharp;
 using AngleSharp.Html.Parser;
 using AngleSharp.Html.Dom;
 using AngleSharp.Dom;
+using Hangfire;
+using Hangfire.SqlServer;
+using System.Threading;
 
 namespace Abot2.Tintin247
 {
@@ -20,6 +23,34 @@ namespace Abot2.Tintin247
     {
         public static async Task Main(string[] args)
         {
+            string connectionString = @"Data Source=.;User Id =sa;Password=123456;Initial Catalog=tintin247.com;Integrated Security=True;MultipleActiveResultSets=True";
+            GlobalConfiguration.Configuration
+                .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
+                .UseColouredConsoleLogProvider()
+                .UseSimpleAssemblyNameTypeSerializer()
+                .UseRecommendedSerializerSettings()
+                .UseSqlServerStorage(connectionString, new SqlServerStorageOptions
+                {
+                    CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+                    SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+                    QueuePollInterval = TimeSpan.Zero,
+                    UseRecommendedIsolationLevel = true,
+                    UsePageLocksOnDequeue = true,
+                    DisableGlobalLocks = true
+                });
+
+            RecurringJob.AddOrUpdate(() => BackgroundJobCrawl(), Cron.MinuteInterval(30));
+
+
+            using (var server = new BackgroundJobServer())
+            {
+                Console.ReadLine();
+            }
+        }
+
+        public static async Task BackgroundJobCrawl()
+        {
+
             Log.Logger = new LoggerConfiguration()
                .MinimumLevel.Debug()
                .Enrich.WithThreadId()
@@ -31,28 +62,29 @@ namespace Abot2.Tintin247
 
             var listUri = new List<string> { "https://m.baomoi.com/tin-moi.epi", "https://m.baomoi.com" };
 
-            var existedCategory = CheckExistedCategory();
-            if (!existedCategory)
-            {
-                await CrawlCategory("https://m.baomoi.com");
-            }
-            var existedPartner = CheckExistedPartner();
-            if (!existedPartner)
-            {
-                await CrawlPartner("https://baomoi.com/");
-            }
-            await Crawler(listUri);
+            //var existedCategory = CheckExistedCategory();
+            //if (!existedCategory)
+            //{
+            //    await CrawlCategory("https://m.baomoi.com");
+            //}
+            //var existedPartner = CheckExistedPartner();
+            //if (!existedPartner)
+            //{
+            //    await CrawlPartner("https://baomoi.com/");
+            //}
+            //await Crawler(listUri);
 
             //ReplaceSlug();
             //TestReplaceContent();
-           // UpdateGroupCategory();
+            // UpdateGroupCategory();
+
+            Thread.Sleep(10000);
 
             sw.Stop();
             TimeSpan ts = sw.Elapsed;
 
-            string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}", ts.Minutes, ts.Seconds,ts.Milliseconds);
+            string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}", ts.Minutes, ts.Seconds, ts.Milliseconds);
             Log.Information(string.Format("--------------- Done, RunTime -> {0} --------------", elapsedTime));
-            Console.ReadKey();
         }
 
         private static async Task DemoSimpleCrawler()

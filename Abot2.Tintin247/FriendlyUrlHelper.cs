@@ -2,167 +2,75 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace Abot2.Tintin247
 {
     public static class FriendlyUrlHelper
     {
-        public static string GetFriendlyTitle(string title, bool remapToAscii = false, int maxlength = 80)
+        public static string GenerateSlug(string str, bool hierarchical = true)
         {
-            if (title == null)
+            var slug = str.Trim().ToLower();
+
+            string[] decomposed = new string[] { "à","á","ạ","ả","ã","â","ầ","ấ","ậ","ẩ","ẫ","ă",
+                                                    "ằ","ắ","ặ","ẳ","ẵ","è","é","ẹ","ẻ","ẽ","ê","ề" ,
+                                                    "ế","ệ","ể","ễ", "ì","í","ị","ỉ","ĩ", "ò","ó","ọ",
+                                                    "ỏ","õ","ô","ồ","ố","ộ","ổ","ỗ","ơ" ,"ò","ớ","ợ","ở",
+                                                    "õ", "ù","ú","ụ","ủ","ũ","ư","ừ","ứ","ự","ử","ữ",
+                                                    "ỳ","ý","ỵ","ỷ","ỹ", "đ",
+                                                    "À","À","Ạ","Ả","Ã","Â","Ầ","Ấ","Ậ","Ẩ","Ẫ","Ă" ,
+                                                    "Ằ","Ắ","Ặ","Ẳ","Ẵ", "È","É","Ẹ","Ẻ","Ẽ","Ê","Ề",
+                                                    "Ế","Ệ","Ể","Ễ", "Ì","Í","Ị","Ỉ","Ĩ", "Ò","Ó","Ọ","Ỏ",
+                                                    "Õ","Ô","Ồ","Ố","Ộ","Ổ","Ỗ","Ơ" ,"Ờ","Ớ","Ợ","Ở","Ỡ",
+                                                    "Ù","Ú","Ụ","Ủ","Ũ","Ư","Ừ","Ứ","Ự","Ử","Ữ", "Ỳ","Ý","Ỵ",
+                                                    "Ỷ","Ỹ", "Đ"};
+            string[] precomposed =  {  "à","á","ạ","ả","ã","â","ầ","ấ","ậ","ẩ","ẫ","ă",
+                                        "ằ","ắ","ặ","ẳ","ẵ","è","é","ẹ","ẻ","ẽ","ê","ề" ,
+                                        "ế","ệ","ể","ễ", "ì","í","ị","ỉ","ĩ", "ò","ó","ọ","ỏ",
+                                        "õ","ô","ồ","ố","ộ","ổ","ỗ","ơ" ,"ờ","ớ","ợ","ở","ỡ", "ù",
+                                        "ú","ụ","ủ","ũ","ư","ừ","ứ","ự","ử","ữ", "ỳ","ý","ỵ","ỷ","ỹ",
+                                        "đ", "À","Á","Ạ","Ả","Ã","Â","Ầ","Ấ","Ậ","Ẩ","Ẫ","Ă" ,"Ằ","Ắ",
+                                        "Ặ","Ẳ","Ẵ", "È","É","Ẹ","Ẻ","Ẽ","Ê","Ề","Ế","Ệ","Ể","Ễ", "Ì",
+                                        "Í","Ị","Ỉ","Ĩ", "Ò","Ó","Ọ","Ỏ","Õ","Ô","Ồ","Ố","Ộ","Ổ","Ỗ",
+                                        "Ơ" ,"Ờ","Ớ","Ợ","Ở","Ỡ", "Ù","Ú","Ụ","Ủ","Ũ","Ư","Ừ","Ứ","Ự",
+                                        "Ử","Ữ", "Ỳ","Ý","Ỵ","Ỷ","Ỹ", "Đ"};
+            string[] latin =  { "a","a","a","a","a","a","a","a","a","a","a" ,
+                                "a","a","a","a","a","a", "e","e","e","e","e",
+                                "e","e","e","e","e","e", "i","i","i","i","i", "o",
+                                "o","o","o","o","o","o","o","o","o","o","o" ,"o","o","o","o","o",
+                                "u","u","u","u","u","u","u","u","u","u","u", "y","y","y","y","y", "d",
+                                "a","a","a","a","a","a","a","a","a","a","a","a" ,"a","a","a","a","a",
+                                "e","e","e","e","e","e","e","e","e","e","e", "i","i","i","i","i", "o",
+                                "o","o","o","o","o","o","o","o","o","o","o" ,"o","o","o","o","o", "u",
+                                "u","u","u","u","u","u","u","u","u","u", "y","y","y","y","y", "d"};
+
+            // Convert culture specific characters
+            for (int i = 0; i < decomposed.Length; i++)
             {
-                return string.Empty;
+                slug = slug.Replace(decomposed[i], latin[i]);
+                slug = slug.Replace(precomposed[i], latin[i]);
             }
 
-            int length = title.Length;
-            bool prevdash = false;
-            StringBuilder stringBuilder = new StringBuilder(length);
-            char c;
+            // Remove special characters
+            slug = Regex.Replace(slug, @"[^a-z0-9-/ ]", "").Replace("--", "-");
 
-            for (int i = 0; i < length; ++i)
-            {
-                c = title[i];
-                if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))
-                {
-                    stringBuilder.Append(c);
-                    prevdash = false;
-                }
-                else if (c >= 'A' && c <= 'Z')
-                {
-                    // tricky way to convert to lower-case
-                    stringBuilder.Append((char)(c | 32));
-                    prevdash = false;
-                }
-                else if ((c == ' ') || (c == ',') || (c == '.') || (c == '/') ||
-                  (c == '\\') || (c == '-') || (c == '_') || (c == '='))
-                {
-                    if (!prevdash && (stringBuilder.Length > 0))
-                    {
-                        stringBuilder.Append('-');
-                        prevdash = true;
-                    }
-                }
-                else if (c >= 128)
-                {
-                    int previousLength = stringBuilder.Length;
+            // Remove whitespaces
+            slug = Regex.Replace(slug.Replace("-", " "), @"\s+", " ").Replace(" ", "-");
 
-                    if (remapToAscii)
-                    {
-                        stringBuilder.Append(RemapInternationalCharToAscii(c));
-                    }
-                    else
-                    {
-                        stringBuilder.Append(c);
-                    }
+            // Remove slash if non-hierarchical
+            if (!hierarchical)
+                slug = slug.Replace("/", "-");
 
-                    if (previousLength != stringBuilder.Length)
-                    {
-                        prevdash = false;
-                    }
-                }
+            // Remove multiple dashes
+            slug = Regex.Replace(slug, @"[-]+", "-");
 
-                if (i == maxlength)
-                {
-                    break;
-                }
-            }
-
-            if (prevdash)
-            {
-                return stringBuilder.ToString().Substring(0, stringBuilder.Length - 1);
-            }
-            else
-            {
-                return stringBuilder.ToString();
-            }
-        }
-
-        /// <summary>
-        /// Remaps the international character to their equivalent ASCII characters. See
-        /// http://meta.stackexchange.com/questions/7435/non-us-ascii-characters-dropped-from-full-profile-url/7696#7696
-        /// </summary>
-        /// <param name="character">The character to remap to its ASCII equivalent.</param>
-        /// <returns>The remapped character</returns>
-        private static string RemapInternationalCharToAscii(char character)
-        {
-            string s = character.ToString().ToLowerInvariant();
-            if ("àåáâäãåąā".Contains(s))
-            {
-                return "a";
-            }
-            else if ("èéêëę".Contains(s))
-            {
-                return "e";
-            }
-            else if ("ìíîïı".Contains(s))
-            {
-                return "i";
-            }
-            else if ("òóôõöøő".Contains(s))
-            {
-                return "o";
-            }
-            else if ("ùúûüŭů".Contains(s))
-            {
-                return "u";
-            }
-            else if ("çćčĉ".Contains(s))
-            {
-                return "c";
-            }
-            else if ("żźž".Contains(s))
-            {
-                return "z";
-            }
-            else if ("śşšŝ".Contains(s))
-            {
-                return "s";
-            }
-            else if ("ñń".Contains(s))
-            {
-                return "n";
-            }
-            else if ("ýÿ".Contains(s))
-            {
-                return "y";
-            }
-            else if ("ğĝ".Contains(s))
-            {
-                return "g";
-            }
-            else if (character == 'ř')
-            {
-                return "r";
-            }
-            else if (character == 'ł')
-            {
-                return "l";
-            }
-            else if ("đð".Contains(s))
-            {
-                return "d";
-            }
-            else if (character == 'ß')
-            {
-                return "ss";
-            }
-            else if (character == 'Þ')
-            {
-                return "th";
-            }
-            else if (character == 'ĥ')
-            {
-                return "h";
-            }
-            else if (character == 'ĵ')
-            {
-                return "j";
-            }
-            else
-            {
-                return string.Empty;
-            }
+            // Remove leading & trailing dashes
+            if (slug.EndsWith("-"))
+                slug = slug.Substring(0, slug.LastIndexOf("-"));
+            if (slug.StartsWith("-"))
+                slug = slug.Substring(Math.Min(slug.IndexOf("-") + 1, slug.Length));
+            return slug;
         }
     }
 }
