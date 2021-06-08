@@ -16,6 +16,12 @@ using AngleSharp.Dom;
 using Hangfire;
 using Hangfire.SqlServer;
 using System.Threading;
+using Hangfire.Storage;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Configuration;
+using System.IO;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
 
 namespace Abot2.Tintin247
 {
@@ -23,13 +29,16 @@ namespace Abot2.Tintin247
     {
         public static async Task Main(string[] args)
         {
-            string connectionString = @"Data Source=.;User Id =sa;Password=123456;Initial Catalog=tintin247.com;Integrated Security=True;MultipleActiveResultSets=True";
+            using IHost host = CreateHostBuilder(args).Build();
+
+            var config = host.Services.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+
             GlobalConfiguration.Configuration
                 .SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
                 .UseColouredConsoleLogProvider()
                 .UseSimpleAssemblyNameTypeSerializer()
                 .UseRecommendedSerializerSettings()
-                .UseSqlServerStorage(connectionString, new SqlServerStorageOptions
+                .UseSqlServerStorage(config.GetConnectionString("HangfireConnection"), new SqlServerStorageOptions
                 {
                     CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
                     SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
@@ -39,25 +48,61 @@ namespace Abot2.Tintin247
                     DisableGlobalLocks = true
                 });
 
-            RecurringJob.AddOrUpdate(() => BackgroundJobCrawl(), Cron.MinuteInterval(30));
+            using (var connection = JobStorage.Current.GetConnection())
+            {
+                foreach (var recurringJob in connection.GetRecurringJobs())
+                {
+                    Log.Information(string.Format("Delete RecurringJob: {0} ", recurringJob.Id));
+                    RecurringJob.RemoveIfExists(recurringJob.Id);
+                }
+       
+                RecurringJob.AddOrUpdate(() => BackgroundJobCrawl(), Cron.Hourly);
+                Log.Information("Create RecurringJob Success");
 
+                //var recurring = connection.GetRecurringJobs().FirstOrDefault(x => x.Id == "Program.BackgroundJobCrawl");
+                //if (recurring == null)
+                //{
+                //    RecurringJob.AddOrUpdate(() => BackgroundJobCrawl(), Cron.Minutely);
+                //}
+            }
 
             using (var server = new BackgroundJobServer())
             {
                 Console.ReadLine();
             }
+
+            await host.RunAsync();
         }
+
+        static IHostBuilder CreateHostBuilder(string[] args) =>
+           Host.CreateDefaultBuilder(args)
+               .ConfigureAppConfiguration((hostingContext, configuration) =>
+               {
+                   configuration.Sources.Clear();
+
+                   IHostEnvironment env = hostingContext.HostingEnvironment;
+
+                   configuration
+                       .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+
+                   IConfigurationRoot configurationRoot = configuration.Build();
+
+
+                   //Initialize Logger
+                   Log.Logger = new LoggerConfiguration()
+                       .ReadFrom.Configuration(configurationRoot)
+                       .CreateLogger();
+               });
+
 
         public static async Task BackgroundJobCrawl()
         {
+            using (var connection = JobStorage.Current.GetConnection())
+            {
+                var recurring = connection.GetRecurringJobs().FirstOrDefault(x => x.Id == "Program.BackgroundJobCrawl");
+                Log.Information(string.Format(">>>>>>>>>>>>>>>>> Starting JobId {0} <<<<<<<<<<<<<<<<<<<", recurring.LastJobId == null ? "0" : recurring.LastJobId.ToString()));
+            }
 
-            Log.Logger = new LoggerConfiguration()
-               .MinimumLevel.Debug()
-               .Enrich.WithThreadId()
-               .WriteTo.Console(outputTemplate: Constants.LogFormatTemplate)
-               .CreateLogger();
-
-            Log.Information("------------------------- Starting up! ----------------------------");
             Stopwatch sw = Stopwatch.StartNew();
 
             var listUri = new List<string> { "https://m.baomoi.com/tin-moi.epi", "https://m.baomoi.com" };
@@ -72,19 +117,17 @@ namespace Abot2.Tintin247
             //{
             //    await CrawlPartner("https://baomoi.com/");
             //}
-            //await Crawler(listUri);
+            await Crawler(listUri);
 
             //ReplaceSlug();
             //TestReplaceContent();
             // UpdateGroupCategory();
 
-            Thread.Sleep(10000);
-
             sw.Stop();
             TimeSpan ts = sw.Elapsed;
 
             string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}", ts.Minutes, ts.Seconds, ts.Milliseconds);
-            Log.Information(string.Format("--------------- Done, RunTime -> {0} --------------", elapsedTime));
+            Log.Information(string.Format("--------------------------------- Done, RunTime -> {0} ----------------------------------", elapsedTime));
         }
 
         private static async Task DemoSimpleCrawler()
@@ -99,7 +142,7 @@ namespace Abot2.Tintin247
             crawler.PageCrawlCompleted += Crawler_PageCrawlCompleted;
 
             var crawlResult = await crawler.CrawlAsync(new Uri("https://m.baomoi.com"));
-            
+
         }
 
         private static void Crawler_PageCrawlCompleted(object sender, PageCrawlCompletedArgs e)
@@ -124,7 +167,7 @@ namespace Abot2.Tintin247
                 //{
                 //    dataCategory = JsonSerializer.Deserialize<List<ArticleCategory>>(dataRedisCategory);
                 //}
-            
+
 
 
                 var dataArticleCache = GetDataCrawl();
@@ -148,7 +191,7 @@ namespace Abot2.Tintin247
                     var aricleList = crawledPage.AngleSharpHtmlDocument.QuerySelector(".timeline").Children;
                     if (aricleList != null)
                     {
-                        foreach (var article in aricleList.Where(x=>x.ClassName.Contains("rank1-stories") || x.ClassName.Contains("story")))
+                        foreach (var article in aricleList.Where(x => x.ClassName.Contains("rank1-stories") || x.ClassName.Contains("story")))
                         {
                             AngleSharp.Dom.IElement elementData = article;
                             var isRank1 = article.ClassName.Contains("rank1-stories");
@@ -173,7 +216,7 @@ namespace Abot2.Tintin247
                                 var sourceName = storyMeta.QuerySelector(".source-image")?.GetAttribute("alt");
                                 var datetime = storyMeta.QuerySelector(".friendly").GetAttribute("datetime");
                                 var description = storyElement.QuerySelector(".story__summary").TextContent.Trim();
-                      
+
                                 string fullLink = string.Format("{0}{1}", "https://baomoi.com", link);
 
                                 //Get Detail by link
@@ -184,7 +227,7 @@ namespace Abot2.Tintin247
                                 var angleSharpHtmlDocumentDetail = crawledPageDetail.AngleSharpHtmlDocument;
                                 var breadcrumb = angleSharpHtmlDocumentDetail.QuerySelector(".breadcrumb").QuerySelectorAll(".item>a");
                                 List<string> listBreadcrumb = new List<string>();
-                                foreach(var item in breadcrumb)
+                                foreach (var item in breadcrumb)
                                 {
                                     listBreadcrumb.Add(item.TextContent.Trim());
                                 }
@@ -272,14 +315,14 @@ namespace Abot2.Tintin247
                     }
                 }
 
-                Log.Information(string.Format("-----------Total: {0}", listDataCrawl.Count));
+                Log.Information(string.Format("----> Total: {0}", listDataCrawl.Count));
 
             }
             catch (Exception ex)
             {
-                Log.Error("{crawledPage}",ex.Message);
+                Log.Error("{crawledPage}", ex.Message);
             }
-            
+
         }
 
         private static async Task<CrawledPage> PageRequester(string uri)
@@ -291,14 +334,14 @@ namespace Abot2.Tintin247
             };
             var pageRequester = new PageRequester(config, new WebContentExtractor());
 
-           return await pageRequester.MakeRequestAsync(new Uri(uri));
+            return await pageRequester.MakeRequestAsync(new Uri(uri));
         }
 
         private static List<Article> GetDataCrawl()
         {
             using (var dbcontext = new tintin247comContext())
             {
-                return  dbcontext.Articles.OrderByDescending(x=>x.CreatedOn).Take(300).ToList<Article>();
+                return dbcontext.Articles.OrderByDescending(x => x.CreatedOn).Take(300).ToList<Article>();
             }
         }
 
@@ -369,7 +412,7 @@ namespace Abot2.Tintin247
                             ParentId = id,
                             CreatedBy = "0bdd8200-ff66-46f3-bfb0-78a43e1124cb",
                             CreatedOn = DateTime.Now,
-                            Order =order
+                            Order = order
                         });
                         await dbContext.SaveChangesAsync();
                         order += 1;
@@ -391,7 +434,7 @@ namespace Abot2.Tintin247
         {
             using (var dbcontext = new tintin247comContext())
             {
-                return  dbcontext.ArticleCategories.Any();
+                return dbcontext.ArticleCategories.Any();
             }
         }
         private static bool CheckExistedPartner()
@@ -408,7 +451,7 @@ namespace Abot2.Tintin247
             using (var dbcontext = new tintin247comContext())
             {
                 var listData = dbcontext.Articles.ToList<Article>();
-                foreach(var item in listData)
+                foreach (var item in listData)
                 {
                     item.Slug = StringHelper.ConvertShortName(item.Title);
                     listDataReplace.Add(item);
@@ -446,13 +489,13 @@ namespace Abot2.Tintin247
             using (var dbcontext = new tintin247comContext())
             {
                 dbcontext.ChangeTracker.QueryTrackingBehavior = Microsoft.EntityFrameworkCore.QueryTrackingBehavior.NoTracking;
-                var data = dbcontext.Articles.Where(x=>x.CreatedOn.Day != 3);
+                var data = dbcontext.Articles.Where(x => x.CreatedOn.Day != 3);
 
                 var parser = new HtmlParser(new HtmlParserOptions
                 {
                     IsNotConsumingCharacterReferences = true,
                 });
-                foreach(var item in data)
+                foreach (var item in data)
                 {
                     var newArtileString = JsonSerializer.Serialize(item);
                     var newArtile = JsonSerializer.Deserialize<Article>(newArtileString);
@@ -483,11 +526,11 @@ namespace Abot2.Tintin247
             var crawledPage = await PageRequester(Uri);
             Log.Information("{crawledPage}", new { url = crawledPage.Uri, status = Convert.ToInt32(crawledPage.HttpResponseMessage?.StatusCode) });
 
-           
+
             using (var dbContext = new tintin247comContext())
             {
                 var order = 1;
-                var  listPartner = crawledPage.AngleSharpHtmlDocument.QuerySelectorAll(".box-content>.wrap>ul>li");
+                var listPartner = crawledPage.AngleSharpHtmlDocument.QuerySelectorAll(".box-content>.wrap>ul>li");
                 foreach (var item in listPartner)
                 {
                     var title = item.QuerySelector("span").TextContent.Trim();
@@ -504,7 +547,7 @@ namespace Abot2.Tintin247
                         Order = order,
                     };
                     await dbContext.Partners.AddAsync(partner);
-          
+
                     order += 1;
                 }
                 await dbContext.SaveChangesAsync();
@@ -517,7 +560,7 @@ namespace Abot2.Tintin247
             using (var dbcontext = new tintin247comContext())
             {
                 var listCategory = dbcontext.ArticleCategories.ToList<ArticleCategory>();
-                var listData = dbcontext.Articles.ToList<Article>().Where(x=>x.GroupCategoryId == 0);
+                var listData = dbcontext.Articles.ToList<Article>().Where(x => x.GroupCategoryId == 0);
                 foreach (var item in listData)
                 {
                     item.GroupCategoryId = listCategory.Where(x => x.Id == item.CategoryId).FirstOrDefault().ParentId.Value;
