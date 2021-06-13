@@ -56,7 +56,7 @@ namespace Abot2.Tintin247
                     RecurringJob.RemoveIfExists(recurringJob.Id);
                 }
        
-                RecurringJob.AddOrUpdate(() => BackgroundJobCrawl(), Cron.Hourly);
+                RecurringJob.AddOrUpdate(() => BackgroundJobCrawl(), "*/30 * * * *");
                 Log.Information("Create RecurringJob Success");
 
                 //var recurring = connection.GetRecurringJobs().FirstOrDefault(x => x.Id == "Program.BackgroundJobCrawl");
@@ -272,7 +272,7 @@ namespace Abot2.Tintin247
                                         Title = title,
                                         Slug = StringHelper.ConvertShortName(title),
                                         Description = description,
-                                        ThumbImage = thumbImage,
+                                        ThumbImage = thumbImage.Replace("https://photo-baomoi.zadn.vn/w300", "https://photo-baomoi.zadn.vn/w700"),
                                         Image = image,
                                         Link = link,
                                         FullLink = fullLink,
