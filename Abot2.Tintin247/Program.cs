@@ -22,6 +22,9 @@ using Microsoft.Extensions.Configuration;
 using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
+using MimeKit;
+using MailKit.Security;
+using MailKit.Net.Smtp;
 
 namespace Abot2.Tintin247
 {
@@ -97,10 +100,12 @@ namespace Abot2.Tintin247
 
         public static async Task BackgroundJobCrawl()
         {
+            var lastJobId = string.Empty;
             using (var connection = JobStorage.Current.GetConnection())
             {
                 var recurring = connection.GetRecurringJobs().FirstOrDefault(x => x.Id == "Program.BackgroundJobCrawl");
-                Log.Information(string.Format(">>>>>>>>>>>>>>>>> Starting JobId {0} <<<<<<<<<<<<<<<<<<<", recurring.LastJobId == null ? "0" : recurring.LastJobId.ToString()));
+                lastJobId = recurring.LastJobId == null ? "0" : recurring.LastJobId.ToString();
+                Log.Information(string.Format(">>>>>>>>>>>>>>>>> Starting JobId {0} <<<<<<<<<<<<<<<<<<<", lastJobId));
             }
 
             Stopwatch sw = Stopwatch.StartNew();
@@ -117,7 +122,7 @@ namespace Abot2.Tintin247
             //{
             //    await CrawlPartner("https://baomoi.com/");
             //}
-            await Crawler(listUri);
+            var result = await Crawler(listUri);
 
             //ReplaceSlug();
             //TestReplaceContent();
@@ -128,6 +133,8 @@ namespace Abot2.Tintin247
 
             string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}", ts.Minutes, ts.Seconds, ts.Milliseconds);
             Log.Information(string.Format("--------------------------------- Done, RunTime -> {0} ----------------------------------", elapsedTime));
+
+            BackgroundJob.Enqueue(() => SendEmail(lastJobId, result,elapsedTime));
         }
 
         private static async Task DemoSimpleCrawler()
@@ -150,7 +157,7 @@ namespace Abot2.Tintin247
 
         }
 
-        private static async Task Crawler(List<string> listUri)
+        private static async Task<int> Crawler(List<string> listUri)
         {
             try
             {
@@ -272,7 +279,7 @@ namespace Abot2.Tintin247
                                         Title = title,
                                         Slug = StringHelper.ConvertShortName(title),
                                         Description = description,
-                                        ThumbImage = thumbImage.Replace("https://photo-baomoi.zadn.vn/w300", "https://photo-baomoi.zadn.vn/w700"),
+                                        ThumbImage = thumbImage?.Replace("https://photo-baomoi.zadn.vn/w300", "https://photo-baomoi.zadn.vn/w700"),
                                         Image = image,
                                         Link = link,
                                         FullLink = fullLink,
@@ -304,7 +311,8 @@ namespace Abot2.Tintin247
                     }
                 }
 
-                if (listDataCrawl.Count > 0)
+                var total = listDataCrawl.Count;
+                if (total > 0)
                 {
                     //await cache.StringSetAsync(cacheName, JsonSerializer.Serialize(listDataCrawl));
 
@@ -315,13 +323,15 @@ namespace Abot2.Tintin247
                     }
                 }
 
-                Log.Information(string.Format("----> Total: {0}", listDataCrawl.Count));
+                Log.Information(string.Format("----> Total: {0}", total));
+                return total;
 
             }
             catch (Exception ex)
             {
                 Log.Error("{crawledPage}", ex.Message);
             }
+            return 0;
 
         }
 
@@ -567,6 +577,30 @@ namespace Abot2.Tintin247
                     dbcontext.Articles.Update(item);
                 }
                 dbcontext.SaveChanges();
+            }
+        }
+
+        public static async Task SendEmail(string jobId,int total, string runtime)
+        {
+            try
+            {
+                var email = new MimeMessage();
+                email.Sender = MailboxAddress.Parse("tintin247.com");
+                email.To.Add(MailboxAddress.Parse("hoangan007@gmail.com"));
+                email.Subject = "Crawler success jobId: " + jobId;
+                var builder = new BodyBuilder();
+                builder.HtmlBody = string.Format("Success at: {0} - Total: {1} - Runtime: {2}", DateTime.Now.ToString("dd/MM/yyyy HH:mm"),total,runtime);
+                email.Body = builder.ToMessageBody();
+                using var smtp = new SmtpClient();
+                smtp.Connect("smtp.gmail.com",587, SecureSocketOptions.StartTls);
+                smtp.Authenticate("nguyenhoangan.dev@gmail.com", "h0@ng.@n");
+                await smtp.SendAsync(email);
+                smtp.Disconnect(true);
+                Log.Information("Send Email Success !");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex,"Send Email Error");
             }
         }
     }
