@@ -210,7 +210,7 @@ namespace Abot2.Tintin247
                             var aid = elementData.GetAttribute("data-aid");
 
                             var storyElement = elementData.QuerySelector(".story__link");
-                            var existed = dataArticleCache.Any(x => x.Aid == aid);
+                            var existed = dataArticleCache.Any(x => x == aid);
                             if (storyElement != null && !existed)
                             {
                                 var storyMeta = storyElement.QuerySelector(".story__meta");
@@ -304,7 +304,7 @@ namespace Abot2.Tintin247
                                         IsPublished = typeVideo ? false : true
                                     };
                                     listDataCrawl.Add(articleCrawled);
-                                    dataArticleCache.Add(articleCrawled);
+                                    dataArticleCache.Add(articleCrawled.Aid);
                                 }
                             }
                         }
@@ -347,11 +347,11 @@ namespace Abot2.Tintin247
             return await pageRequester.MakeRequestAsync(new Uri(uri));
         }
 
-        private static List<Article> GetDataCrawl()
+        private static List<string> GetDataCrawl()
         {
             using (var dbcontext = new tintin247comContext())
             {
-                return dbcontext.Articles.OrderByDescending(x => x.CreatedOn).Take(300).ToList<Article>();
+                return dbcontext.Articles.AsNoTracking().Select(x => x.Aid).ToList<string>();
             }
         }
 
